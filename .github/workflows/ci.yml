@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: End-to-End Pipeline & Slide Build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/ -v
+
+      - name: Test Mock Report Generation
+        run: |
+          python generate_report.py --mock --mock-count 30
+
+      - name: Test CLI Script Argument Parsing
+        run: |
+          python reclassify_others.py --help
+
+      - name: Test importability of shared modules
+        run: |
+          python -c "from zammad_utils.config import load_zammad_config; print('config OK')"
+          python -c "from reclassify_others import determine_new_group; print('reclassify OK')"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: zammad-report-slide/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: zammad-report-slide
+        run: npm ci
+
+      - name: Build presentation slides
+        working-directory: zammad-report-slide
+        run: npm run build

@@ -1,0 +1,27 @@
+# === Environment & Secrets ===
+.env
+
+# === Python ===
+venv/
+__pycache__/
+*.pyc
+.Python
+.pytest_cache/
+
+# === Generated Data & Generated Slides ===
+*.xlsx
+zammad_simplified_assets.json
+zammad-report-slide/public/data/*.json
+zammad-report-slide/slides/report-*/
+
+# === Node.js ===
+node_modules/
+dist/
+
+# === IDE & OS ===
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
