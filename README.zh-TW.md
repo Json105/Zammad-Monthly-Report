@@ -2,7 +2,7 @@
 
 <div align="center">
 
-🌐 **[English](README.md)** • **[繁體中文 (Traditional Chinese)](README.zh-TW.md)**
+🌐 **[English](README.md)** | **[繁體中文 (Traditional Chinese)](README.zh-TW.md)**
 
 <br />
 
