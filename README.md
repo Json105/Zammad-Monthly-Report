@@ -14,11 +14,29 @@
 
 **Automatically fetch monthly ticket data from Zammad, generating multi-sheet Excel reports and modern interactive presentation slides.**
 
+[🎯 Background & Benefits](#-background--benefits) •
 [✨ Quick Demo](#-1-minute-quick-demo-mock-mode) •
 [🚀 Getting Started](#-getting-started-connect-to-zammad) •
 [📖 CLI Reference](#-cli-commands--options)
 
 </div>
+
+---
+
+## 🎯 Background & Benefits
+
+### 📌 Problem Statement & Motivation
+In enterprise IT operations and customer support workflows, monthly reporting frequently encounters the following bottlenecks:
+- **Time-Consuming Manual Work**: Teams spend hours manually exporting data from Zammad, cleaning fields, and creating separate Excel sheets for ticket statuses.
+- **High Presentation Overhead**: Preparing slides for executive or cross-team meetings requires manually making static charts and pasting them into PowerPoint.
+- **Inaccurate Categorization**: Tickets often accumulate under generic `Others` groups without proper routing, distorting metrics and workload analysis.
+
+### 🚀 Business Value & Key Benefits
+- ⏱️ **90%+ Time Savings**: Cuts down report and slide preparation time from several hours to **under 10 seconds** with a single command.
+- 📊 **Accurate & Insightful Data**: Automatically aggregates status breakdowns, department allocations, SOP tracking, and future goals to empower data-driven decisions.
+- 🎞️ **Modern Interactive Slides**: Powered by [Open-Slide](https://open-slide.dev/), replacing rigid static slides with responsive, interactive web presentations.
+- 🤖 **Smart Ticket Reclassification**: Features rule-based automated suggestions to reclassify generic `Others` tickets into correct service groups.
+- 🎲 **Zero Setup Barrier**: Built-in Mock Mode allows instant evaluation of reports and slides without requiring live Zammad API credentials.
 
 ---
 
