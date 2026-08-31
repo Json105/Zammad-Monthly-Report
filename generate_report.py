@@ -87,6 +87,25 @@ def generate_mock_tickets(year_month: str, count: int = 60):
     return mock_tickets
 
 
+def filter_stale_closed_tickets(df: pd.DataFrame, start_date: str) -> pd.DataFrame:
+    """
+    過濾在查詢月份前就已建立、且在查詢月份前就已結案/合併且無任何當月活動的歷史工單。
+    """
+    if df.empty or not {'建立時間', '最後更新時間', '狀態'}.issubset(df.columns):
+        return df
+
+    is_stale_closed = (
+        (df['建立時間'] < start_date) &
+        (df['最後更新時間'] < start_date) &
+        (df['狀態'].isin(['closed', 'merged', 'removed']))
+    )
+    dropped_count = is_stale_closed.sum()
+    if dropped_count > 0:
+        print(f"🧹 已自動過濾 {dropped_count} 筆查詢月份前已結案且無當月活動的歷史舊工單")
+        df = df[~is_stale_closed]
+    return df
+
+
 def fetch_zammad_tickets(url: str, token: str, start_date: str, end_date: str, report_end: str):
     """透過 Zammad API 撈取真實工單 (包含當月新進工單 + 跨月結案與歷史在辦未結工單，自動加總)"""
     headers = {"Authorization": f"Token token={token}"}
@@ -113,7 +132,7 @@ def fetch_zammad_tickets(url: str, token: str, start_date: str, end_date: str, r
     # 2. 查詢跨月結案/異動工單 (過去開立、當月更新/結案)
     query_updated = f"created_at:<{start_date} AND updated_at:>={start_date} AND updated_at:<={end_date}"
     # 3. 查詢歷史在辦未結工單 (過去開立、目前仍處於 open / pending reminder / new 狀態；pending close 視為結案)
-    query_pending = f"created_at:<{start_date} AND (state_id:1 OR state_id:2 OR state_id:3)"
+    query_pending = f'created_at:<{start_date} AND (state.name:new OR state.name:open OR state.name:"pending reminder")'
 
     queries_to_run = [
         ("📥 當月新進工單", query_new),
@@ -244,6 +263,9 @@ def fetch_zammad_tickets(url: str, token: str, start_date: str, end_date: str, r
         if dropped_count > 0:
             print(f"🧹 已自動過濾 {dropped_count} 筆非授權網域提單的無效工單")
             df = df[is_allowed]
+
+    # 歷史已結舊工單過濾
+    df = filter_stale_closed_tickets(df, start_date)
 
     columns_to_export = ['工單編號', '主旨', '標籤', '狀態', '群組', '處理人', '提單人', '建立時間', '最後更新時間']
     final_columns = [col for col in columns_to_export if col in df.columns]
