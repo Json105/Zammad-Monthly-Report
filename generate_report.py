@@ -132,7 +132,7 @@ def fetch_zammad_tickets(url: str, token: str, start_date: str, end_date: str, r
     # 2. 查詢跨月結案/異動工單 (過去開立、當月更新/結案)
     query_updated = f"created_at:<{start_date} AND updated_at:>={start_date} AND updated_at:<={end_date}"
     # 3. 查詢歷史在辦未結工單 (過去開立、目前仍處於 open / pending reminder / new 狀態；pending close 視為結案)
-    query_pending = f'created_at:<{start_date} AND (state.name:new OR state.name:open OR state.name:"pending reminder")'
+    query_pending = f"created_at:<{start_date} AND (state_id:1 OR state_id:2 OR state_id:3)"
 
     queries_to_run = [
         ("📥 當月新進工單", query_new),

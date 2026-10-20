@@ -3,6 +3,8 @@ Shared Zammad API helpers.
 
 Provides thin wrappers around commonly-used Zammad REST endpoints so that
 every script uses consistent error handling, logging, and timeout settings.
+"""
+
 from __future__ import annotations
 
 import logging

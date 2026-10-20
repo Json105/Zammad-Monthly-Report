@@ -45,7 +45,10 @@ jobs:
       - name: Test importability of shared modules
         run: |
           python -c "from zammad_utils.config import load_zammad_config; print('config OK')"
+          python -c "from zammad_utils.api import fetch_ticket_states; print('api OK')"
           python -c "from reclassify_others import determine_new_group; print('reclassify OK')"
+          python -c "import get_states; print('get_states OK')"
+          python -c "import export_zammad_data; print('export_zammad_data OK')"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
