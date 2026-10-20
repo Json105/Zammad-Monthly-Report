@@ -187,17 +187,20 @@ zammad-monthly-report/
 │   ├── api.py              #    共用 Zammad API 呼叫
 │   └── date_utils.py       #    月份區間計算（支援閏年）
 ├── tests/                  # 🧪 單元測試 (pytest)
+│   ├── test_api.py
 │   ├── test_config.py
 │   ├── test_date_utils.py
-│   └── test_reclassify.py
+│   ├── test_reclassify.py
+│   └── test_report_filter.py
 └── zammad-report-slide/    # 🌟 Open-Slide 簡報專案
+    ├── .env.example        # 簡報自訂品牌與設定範本
     ├── package.json
     ├── open-slide.config.ts
     ├── public/data/
     │   └── tickets.json    # 報表程式產出的工單資料來源
-    └── slides/
-        └── monthly-report/
-            └── index.tsx   # 投影片設計與 Recharts 圖表邏輯
+    ├── themes/
+    │   └── monthlyReportTemplate.tsx # 投影片設計與 Recharts 圖表邏輯
+    └── slides/             # 各月份自動產出的簡報 (report-YYYY-MM/)
 ```
 
 ---
