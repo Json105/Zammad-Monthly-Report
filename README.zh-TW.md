@@ -14,7 +14,15 @@
 
 **自動從 Zammad 工單系統擷取月度數據，產出分頁 Excel 報表與現代化互動式簡報。**
 
+<br />
+
+<img src="docs/images/slide-core-metrics.png" alt="Zammad Monthly Report Slide Preview" width="100%" />
+
+<br />
+<br />
+
 [🎯 背景與效益](#-專案背景與效益) •
+[📸 成果展示](#-成果展示-interactive-showcase) •
 [✨ 快速體驗](#-1-分鐘快速體驗-mock-demo-模式) •
 [🚀 正式安裝](#-正式使用-連線-zammad) •
 [📖 參數指南](#-cli-指令與參數說明)
@@ -37,6 +45,34 @@
 - 🎞️ **現代化互動簡報**：以 [Open-Slide](https://open-slide.dev/) 取代傳統靜態投影片，支援互動圖表與即時重點工單穿透展示。
 - 🤖 **智慧工單重分類**：內建智慧規則推薦，自動將 `Others` 工單精準歸類至所屬系統與部門。
 - 🎲 **開箱即用與低門檻**：內建 Mock 資料模式，無需 Zammad Token 即可秒級體驗全套報表與簡報流程。
+
+---
+
+## 📸 成果展示 (Interactive Showcase)
+
+本專案支援將工單數據自動轉化為高視覺水準之動態投影片（基於 React 18 + Open-Slide + Recharts）：
+
+### 1. 核心營運指標與狀態結算 (Executive KPIs & Status Distribution)
+一目了然掌握總工單量、當月結案率、資安事件總數，並透過互動式 Donut 環形圖即時檢視處理進度：
+<div align="center">
+  <img src="docs/images/slide-core-metrics.png" alt="核心服務指標" width="95%" />
+</div>
+
+<br />
+
+### 2. 各服務領域工單統計 (Service Category Breakdown)
+自動彙整軟硬體、資安防護、帳號權限與日常維運負載，以高對比色柱狀圖直觀揭示部門業務分佈：
+<div align="center">
+  <img src="docs/images/slide-group-breakdown.png" alt="各服務類別工單統計" width="95%" />
+</div>
+
+<br />
+
+### 3. SOP 標準化流程與重點追蹤工單 (SOP & Workflow Tracking)
+自動穿透檢索標註 `SOP` 與重點關注之工單，輔助技術知識庫沉澱與制度落實：
+<div align="center">
+  <img src="docs/images/slide-sop-workflows.png" alt="SOP 建立與標準化流程" width="95%" />
+</div>
 
 ---
 

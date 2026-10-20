@@ -14,7 +14,15 @@
 
 **Automatically fetch monthly ticket data from Zammad, generating multi-sheet Excel reports and modern interactive presentation slides.**
 
+<br />
+
+<img src="docs/images/slide-core-metrics.png" alt="Zammad Monthly Report Slide Preview" width="100%" />
+
+<br />
+<br />
+
 [🎯 Background & Benefits](#-background--benefits) •
+[📸 Visual Showcase](#-visual-showcase) •
 [✨ Quick Demo](#-1-minute-quick-demo-mock-mode) •
 [🚀 Getting Started](#-getting-started-connect-to-zammad) •
 [📖 CLI Reference](#-cli-commands--options)
@@ -37,6 +45,34 @@ In enterprise IT operations and customer support workflows, monthly reporting fr
 - 🎞️ **Modern Interactive Slides**: Powered by [Open-Slide](https://open-slide.dev/), replacing rigid static slides with responsive, interactive web presentations.
 - 🤖 **Smart Ticket Reclassification**: Features rule-based automated suggestions to reclassify generic `Others` tickets into correct service groups.
 - 🎲 **Zero Setup Barrier**: Built-in Mock Mode allows instant evaluation of reports and slides without requiring live Zammad API credentials.
+
+---
+
+## 📸 Visual Showcase
+
+Transform operational ticket metrics into dynamic, executive-ready presentations (Powered by React 18 + Open-Slide + Recharts):
+
+### 1. Executive KPIs & Status Distribution
+Instantly track total ticket volume, monthly resolution rates, security incidents, and interactive donut status breakdown:
+<div align="center">
+  <img src="docs/images/slide-core-metrics.png" alt="Core Service Metrics" width="95%" />
+</div>
+
+<br />
+
+### 2. Service Category Breakdown
+Automatically aggregate hardware/software, email security, account permissions, and IT infrastructure loads into clear comparative bar charts:
+<div align="center">
+  <img src="docs/images/slide-group-breakdown.png" alt="Service Category Breakdown" width="95%" />
+</div>
+
+<br />
+
+### 3. SOP & Standardization Workflows
+Drill down into tickets tagged with `SOP` or priority milestones to foster institutional knowledge and standardized IT operations:
+<div align="center">
+  <img src="docs/images/slide-sop-workflows.png" alt="SOP and Standardization Workflows" width="95%" />
+</div>
 
 ---
 
