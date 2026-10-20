@@ -65,10 +65,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 // 服務領域歸類：直觀且易於理解的商業名稱
 const DOMAIN_MAP: Record<string, string> = {
-  'iScala': 'ERP 與業務系統',
   'ERP / Core': 'ERP 與業務系統',
-  'LinkMyGoods': 'ERP 與業務系統',
-  'Redsun': 'ERP 與業務系統',
+  'ERP System': 'ERP 與業務系統',
   'Software': '電腦硬體與辦公軟體',
   'Hardware': '電腦硬體與辦公軟體',
   'Peripherals & Printing': '電腦硬體與辦公軟體',
