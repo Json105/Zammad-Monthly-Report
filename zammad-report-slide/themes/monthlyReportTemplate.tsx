@@ -66,12 +66,14 @@ const STATUS_COLORS: Record<string, string> = {
 // 服務領域歸類：直觀且易於理解的商業名稱
 const DOMAIN_MAP: Record<string, string> = {
   'iScala': 'ERP 與業務系統',
+  'ERP / Core': 'ERP 與業務系統',
   'LinkMyGoods': 'ERP 與業務系統',
   'Redsun': 'ERP 與業務系統',
   'Software': '電腦硬體與辦公軟體',
   'Hardware': '電腦硬體與辦公軟體',
   'Peripherals & Printing': '電腦硬體與辦公軟體',
   'Email Security': '資安防護與帳號權限',
+  'Security': '資安防護與帳號權限',
   'Account & Access': '資安防護與帳號權限',
   'On/Offboarding': '資安防護與帳號權限',
   'Network': '辦公網路與通訊設備',
@@ -79,6 +81,7 @@ const DOMAIN_MAP: Record<string, string> = {
   'Development': '辦公網路與通訊設備',
   'IT Request & Project': '辦公網路與通訊設備',
   'Others': '日常維運與行政事務',
+  'Users / General': '日常維運與行政事務',
   'General Support': '日常維運與行政事務',
 };
 

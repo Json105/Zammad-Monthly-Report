@@ -56,28 +56,28 @@
 
 ## ⚡ 1 分鐘快速體驗 (Mock Demo 模式)
 
-想先看看產出的報表與簡報長什麼樣子？使用內建的 `--mock` 參數即可直接體驗：
+想先看看產出的報表與簡報長什麼樣子？本專案**已內建一組完整的模擬示範簡報 (`demo-report`)**，免連線 Zammad 也無需先設定 Python 即可直接體驗：
 
 ```bash
-# 1. 複製專案
+# 1. 複製專案並進入簡報目錄
 git clone https://github.com/Json105/Zammad-Monthly-Report.git
-cd Zammad-Monthly-Report
+cd Zammad-Monthly-Report/zammad-report-slide
 
-# 2. 建立 Python 虛擬環境並安裝依賴
-python -m venv venv
-source venv/bin/activate  # Windows 請用: venv\Scripts\activate
-pip install -r requirements.txt
-
-# 3. 產生模擬資料 (產生 Excel 報表 + 簡報資料)
-python generate_report.py --mock
-
-# 4. 啟動簡報
-cd zammad-report-slide
+# 2. 安裝依賴並啟動簡報
 npm install
 npm run dev
 ```
 
-瀏覽器打開 `http://localhost:5174/` 即可看到模擬的簡報圖表！
+瀏覽器打開 `http://localhost:5174/` 點選左側選單的 **`IT Service Monthly Report (Demo)`** 即可立即體驗！
+
+👉 **若想自訂模擬筆數或同時產出 Excel 報表**：
+```bash
+# 返回專案根目錄
+cd ..
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+python generate_report.py --mock --mock-count 80
+```
 
 ---
 
@@ -200,7 +200,9 @@ zammad-monthly-report/
     │   └── tickets.json    # 報表程式產出的工單資料來源
     ├── themes/
     │   └── monthlyReportTemplate.tsx # 投影片設計與 Recharts 圖表邏輯
-    └── slides/             # 各月份自動產出的簡報 (report-YYYY-MM/)
+    └── slides/
+        ├── demo-report/    # 🌟 內建 Demo 模擬簡報 (開箱即看)
+        └── report-YYYY-MM/ # 各月份自動產出的簡報 (由 generate_report.py 產出)
 ```
 
 ---

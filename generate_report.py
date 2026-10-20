@@ -35,14 +35,21 @@ DEFAULT_USER_DICT = {
 }
 
 
-def generate_mock_tickets(year_month: str, count: int = 60):
+def generate_mock_tickets(year_month: str, count: int = 65):
     """產生高品質的模擬工單資料供 Demo 或測試使用"""
     print(f"🎲 正在產生 {year_month} 的模擬工單資料 (共 {count} 筆)...")
     
-    statuses = ["closed", "closed", "closed", "open", "pending reminder", "new", "merged"]
-    groups = ["Software", "Hardware", "Network", "ERP / Core", "Security", "Users / General"]
+    statuses = ["closed", "closed", "closed", "closed", "open", "pending reminder", "merged"]
+    groups = [
+        "Software", "Account & Access", "Hardware", "Email Security",
+        "Network", "ERP / Core", "On/Offboarding", "Peripherals & Printing",
+        "IT Request & Project", "Others"
+    ]
     assignees = ["Alex Chen", "Sarah Lin", "Jason Wu", "Emily Wang", "David Chang"]
-    requesters = ["Michael Scott", "Jim Halpert", "Pam Beesly", "Dwight Schrute", "Stanley Hudson", "Kevin Malone", "Angela Martin"]
+    requesters = [
+        "Michael Scott", "Jim Halpert", "Pam Beesly", "Dwight Schrute",
+        "Stanley Hudson", "Kevin Malone", "Angela Martin", "Group-IT Support"
+    ]
     sample_titles = [
         ("SOP - 新進員工帳號與權限開通標準流程建立", "SOP, onboarding"),
         ("VPN 連線異常，無法連入內網系統", "network, vpn"),
@@ -56,8 +63,10 @@ def generate_mock_tickets(year_month: str, count: int = 60):
         ("Teams / OneDrive 檔案同步異常處理", "software, cloud"),
         ("離職員工資產清點與帳號封鎖", "offboarding, asset"),
         ("SOP - 伺服器定期備份與異地還原操作手冊", "SOP, backup"),
+        ("SOP - 資安事件通報與釣魚信件處置指引", "SOP, security"),
         ("遠端桌面連線逾時無法存取資料庫", "network, database"),
         ("新進同仁 NB 配發與基礎環境部署", "hardware, onboarding"),
+        ("總部全球 IT 系統定期同步與資安查核", "Group-IT Support, audit"),
     ]
 
     year, month = map(int, year_month.split('-'))
@@ -67,19 +76,32 @@ def generate_mock_tickets(year_month: str, count: int = 60):
     for i in range(1, count + 1):
         ticket_num = f"56{random.randint(5000, 5999)}"
         title, tags = random.choice(sample_titles)
-        day = random.randint(1, month_days)
-        create_date = f"{year:04d}-{month:02d}-{day:02d}"
-        update_day = min(day + random.randint(0, 5), month_days)
-        update_date = f"{year:04d}-{month:02d}-{update_day:02d}"
-        
+        status = random.choice(statuses)
+        group = random.choice(groups)
+        requester = random.choice(requesters)
+
+        # 模擬少量歷史跨月在辦工單 (展示 Slide 5 跨月未結指標)
+        if random.random() < 0.12 and status in ["open", "pending reminder"]:
+            prev_month = 12 if month == 1 else month - 1
+            prev_year = year - 1 if month == 1 else year
+            prev_days = days_in_month(prev_year, prev_month)
+            p_day = random.randint(1, prev_days)
+            create_date = f"{prev_year:04d}-{prev_month:02d}-{p_day:02d}"
+            update_date = f"{year:04d}-{month:02d}-{random.randint(1, min(10, month_days)):02d}"
+        else:
+            day = random.randint(1, month_days)
+            create_date = f"{year:04d}-{month:02d}-{day:02d}"
+            update_day = min(day + random.randint(0, 5), month_days)
+            update_date = f"{year:04d}-{month:02d}-{update_day:02d}"
+
         mock_tickets.append({
             '工單編號': ticket_num,
             '主旨': f"{title} (#{i})" if random.random() > 0.5 else title,
             '標籤': tags if random.random() > 0.3 else "",
-            '狀態': random.choice(statuses),
-            '群組': random.choice(groups),
+            '狀態': status,
+            '群組': group,
             '處理人': random.choice(assignees),
-            '提單人': random.choice(requesters),
+            '提單人': requester,
             '建立時間': create_date,
             '最後更新時間': update_date
         })
