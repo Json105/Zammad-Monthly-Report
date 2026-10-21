@@ -16,7 +16,7 @@
 
 <br />
 
-<img src="docs/images/slide-core-metrics.png" alt="Zammad Monthly Report Slide Preview" width="100%" />
+<img src="docs/images/slide-cover.png" alt="Zammad Monthly Report Slide Cover" width="100%" />
 
 <br />
 <br />
