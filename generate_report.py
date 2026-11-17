@@ -3,6 +3,8 @@ from __future__ import annotations
 import requests
 import pandas as pd
 import os
+import re
+import shutil
 import sys
 import argparse
 import random
@@ -11,9 +13,15 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from concurrent.futures import ThreadPoolExecutor
+from dotenv import dotenv_values
 
 from zammad_utils.config import load_zammad_config
 from zammad_utils.date_utils import calculate_month_range, days_in_month
+from zammad_utils.report_metrics import (
+    build_summary_dataframe,
+    classify_valid_service_tickets,
+    format_excel_table_sheet,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -294,54 +302,107 @@ def fetch_zammad_tickets(url: str, token: str, start_date: str, end_date: str, r
     return df[final_columns].to_dict(orient='records')
 
 
+def _resolve_hq_email() -> str:
+    """Resolve HQ email marker from environment, root .env, or zammad-report-slide/.env."""
+    env_hq = os.getenv("HQ_EMAIL", "").strip()
+    if env_hq:
+        return env_hq
+    if os.path.exists(".env"):
+        root_hq = (dotenv_values(".env").get("HQ_EMAIL") or "").strip()
+        if root_hq:
+            return root_hq
+    slide_env_path = os.path.join("zammad-report-slide", ".env")
+    if os.path.exists(slide_env_path):
+        return (dotenv_values(slide_env_path).get("VITE_HQ_EMAIL") or "").strip()
+    return ""
+
+
 def export_reports(ticket_records: list, year_month: str, output_slide_data: bool = True):
-    """匯出 Excel 報表與 Open-Slide 用的 tickets.json"""
+    """匯出 Excel 報表 (含有效服務工單驗證 Table) 與 Open-Slide 用的 tickets.json"""
     if not ticket_records:
         print("⚠️ 查無任何工單資料，略過匯出。")
         return
 
     df = pd.DataFrame(ticket_records)
 
-    # 1. 匯出 Open Slide 專用的 JSON
+    # 1. 匯出 Excel (含有效服務工單驗證 Table、統計驗證摘要、全部工單與狀態分頁)
+    hq_email = _resolve_hq_email()
+    valid_df, all_df, summary = classify_valid_service_tickets(
+        ticket_records, year_month, hq_email=hq_email
+    )
+    summary_df = build_summary_dataframe(summary)
+
+    excel_filename = f"Zammad_Report_{year_month}.xlsx"
+    used_table_names: set[str] = {"ValidServiceTickets", "AuditSummary", "AllTickets"}
+
+    with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
+        # 有效服務工單（排除 merged，供核對簡報統計來源）
+        valid_df.to_excel(writer, sheet_name='有效服務工單', index=False)
+        format_excel_table_sheet(writer.sheets['有效服務工單'], valid_df, 'ValidServiceTickets')
+
+        # 統計驗證摘要（對應簡報各項數字指標）
+        summary_df.to_excel(writer, sheet_name='統計驗證摘要', index=False)
+        format_excel_table_sheet(writer.sheets['統計驗證摘要'], summary_df, 'AuditSummary')
+
+        # 全部工單（保留原始擷取與排除標記）
+        all_df.to_excel(writer, sheet_name='全部工單', index=False)
+        format_excel_table_sheet(writer.sheets['全部工單'], all_df, 'AllTickets')
+
+        # 依狀態自動拆分工作表
+        if '狀態' in df.columns:
+            for idx, state in enumerate(df['狀態'].unique(), start=1):
+                df_state = df[df['狀態'] == state].reset_index(drop=True)
+                safe_sheet_name = str(state)[:30].replace('/', '_').replace('\\', '_')
+                df_state.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+
+                base_table_name = f"Status_{re.sub(r'[^A-Za-z0-9_]', '_', safe_sheet_name)}"
+                table_name = base_table_name
+                while table_name in used_table_names:
+                    table_name = f"{base_table_name}_{idx}"
+                used_table_names.add(table_name)
+                format_excel_table_sheet(writer.sheets[safe_sheet_name], df_state, table_name)
+
+    print(
+        f"📊 Excel 報表產出成功: {excel_filename} "
+        f"(有效服務工單 {summary['total_valid']} 筆 / 全部 {summary['total_raw']} 筆)"
+    )
+
+    # 2. 匯出 Open Slide 專用的 JSON、同步 .xlsx 供單一頁面內直接下載，並產生專屬簡報
     if output_slide_data:
         json_dir = os.path.join("zammad-report-slide", "public", "data")
         os.makedirs(json_dir, exist_ok=True)
         json_filename = os.path.join(json_dir, "tickets.json")
         df.to_json(json_filename, orient='records', force_ascii=False, indent=2)
-        # 同步備份特定月份的 JSON 封裝檔
+        # 同步備份特定月份的 JSON 與 Excel 封裝檔
         archive_json = os.path.join(json_dir, f"tickets_{year_month}.json")
         df.to_json(archive_json, orient='records', force_ascii=False, indent=2)
-        print(f"✅ 簡報資料已儲存至: {json_filename} (已封存為 {archive_json})")
+        slide_excel_path = os.path.join(json_dir, excel_filename)
+        shutil.copy2(excel_filename, slide_excel_path)
+        print(f"✅ 簡報資料與 Excel 附件已同步至: {json_dir}/")
 
-        # 2. 自動在 Open Slide 中生成該月份專屬簡報 (如 slides/report-YYYY-MM/index.tsx)
+        # 自動在 Open Slide 中生成該月份專屬簡報 (如 slides/report-YYYY-MM/index.tsx)
         slide_folder = os.path.join("zammad-report-slide", "slides", f"report-{year_month}")
         os.makedirs(slide_folder, exist_ok=True)
         slide_index = os.path.join(slide_folder, "index.tsx")
-        slide_content = f"""import ticketsData from '../../public/data/tickets_{year_month}.json';
-import {{ createReportSlides, design }} from '../../themes/monthlyReportTemplate';
+        slide_content = f"""import type {{ SlideMeta }} from '@open-slide/core';
+import ticketsData from '../../public/data/tickets_{year_month}.json';
+import excelReportUrl from '../../public/data/{excel_filename}?url';
+import {{ createReportSlides, design, transition }} from '../../themes/monthlyReportTemplate';
 
-export {{ design }};
-export default createReportSlides(ticketsData);
+export const meta: SlideMeta = {{
+  title: 'IT Support {year_month} 月報',
+  theme: 'isometric',
+}};
+
+export {{ design, transition }};
+export default createReportSlides(ticketsData, {{
+  excelReportUrl,
+  excelFilename: '{excel_filename}',
+}});
 """
         with open(slide_index, "w", encoding="utf-8") as f:
             f.write(slide_content)
         print(f"🎯 Open Slide 簡報已自動生成: {slide_folder}/ (可於瀏覽器左側選單點選 report-{year_month})")
-
-    # 3. 匯出 Excel (含分頁)
-    excel_filename = f"Zammad_Report_{year_month}.xlsx"
-    with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
-        # 全部工單
-        df_sorted = df.sort_values(by=['狀態', '建立時間'], ascending=[True, False])
-        df_sorted.to_excel(writer, sheet_name='全部工單', index=False)
-        
-        # 依狀態自動拆分工作表
-        if '狀態' in df.columns:
-            for state in df['狀態'].unique():
-                df_state = df[df['狀態'] == state]
-                safe_sheet_name = str(state)[:30].replace('/', '_').replace('\\', '_')
-                df_state.to_excel(writer, sheet_name=safe_sheet_name, index=False)
-                
-    print(f"📊 Excel 報表產出成功: {excel_filename} (已依狀態自動建立分頁)")
 
 
 def main():
