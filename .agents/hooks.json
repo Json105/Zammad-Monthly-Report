@@ -1,0 +1,12 @@
+{
+  "check-done": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "../scripts/check-done.sh --hook",
+        "timeout": 60
+      }
+    ]
+  }
+}

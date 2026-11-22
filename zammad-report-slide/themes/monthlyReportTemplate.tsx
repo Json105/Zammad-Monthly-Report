@@ -116,33 +116,49 @@ const bgImg: CSSProperties = {
   objectFit: 'cover',
 };
 
-// Generic Isometric Cube Mark (portfolio-safe brand emblem)
-const LogoMark = ({ size = 40 }: { size?: number }) => (
-  <svg viewBox="0 0 64 64" width={size} height={size} aria-label="IT Service Portal">
-    <polygon points="32,6 56,19 32,32 8,19" fill={C.sky} />
-    <polygon points="8,19 32,32 32,58 8,45" fill={C.blue} />
-    <polygon points="56,19 56,45 32,58 32,32" fill={C.navy} />
-    <path
-      d="M32 6 L56 19 L56 45 L32 58 L8 45 L8 19 Z M8 19 L32 32 L56 19 M32 32 L32 58"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeWidth="2"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+// Generic Isometric Cube Mark with optional env-driven custom SVG path override
+const LogoMark = ({ size = 40 }: { size?: number }) => {
+  const env = (import.meta as any).env || {};
+  const customPath = (env.VITE_LOGO_SVG_PATH || '').trim();
+  const brandLabel = env.VITE_BRAND_NAME || 'IT Service Portal';
+  if (customPath) {
+    const viewBox = (env.VITE_LOGO_VIEWBOX || '0 0 64 64').trim();
+    const aspect = Number(env.VITE_LOGO_ASPECT) || 1;
+    return (
+      <svg viewBox={viewBox} width={size * aspect} height={size} aria-label={brandLabel}>
+        <path fill={C.brand} d={customPath} />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 64 64" width={size} height={size} aria-label={brandLabel}>
+      <polygon points="32,6 56,19 32,32 8,19" fill={C.sky} />
+      <polygon points="8,19 32,32 32,58 8,45" fill={C.blue} />
+      <polygon points="56,19 56,45 32,58 32,32" fill={C.navy} />
+      <path
+        d="M32 6 L56 19 L56 45 L32 58 L8 45 L8 19 Z M8 19 L32 32 L56 19 M32 32 L32 58"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
 
 const LogoLockup = ({ size = 56 }: { size?: number }) => {
-  const brandName = (import.meta as any).env?.VITE_BRAND_NAME || 'IT Service Portal';
-  const orgName = (import.meta as any).env?.VITE_ORG_NAME || 'Enterprise IT Operations';
+  const env = (import.meta as any).env || {};
+  const brandName = env.VITE_BRAND_NAME || 'IT Service Portal';
+  const orgName = env.VITE_ORG_NAME || 'Enterprise IT Operations';
+  const hasCustomLogo = Boolean((env.VITE_LOGO_SVG_PATH || '').trim());
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.3 }}>
       <LogoMark size={size} />
       <div style={{ lineHeight: 1 }}>
-        <div style={{ fontFamily: 'var(--osd-font-display)', fontWeight: 800, fontSize: size * 0.54, color: C.ink }}>
+        <div style={{ fontFamily: 'var(--osd-font-display)', fontWeight: 800, fontSize: size * (hasCustomLogo ? 0.58 : 0.54), color: C.ink }}>
           {brandName}
         </div>
-        <div style={{ fontWeight: 700, fontSize: size * 0.24, letterSpacing: '0.1em', color: C.muted, marginTop: size * 0.1 }}>
+        <div style={{ fontWeight: 700, fontSize: size * (hasCustomLogo ? 0.26 : 0.24), letterSpacing: hasCustomLogo ? '0.12em' : '0.1em', color: hasCustomLogo ? C.ink : C.muted, marginTop: size * 0.1 }}>
           {orgName}
         </div>
       </div>
@@ -353,6 +369,7 @@ const GROUP_DISPLAY_NAME: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   'closed': C.green,
   'Work in Progress (本月)': C.amber,
+  'Work in Progress (本期)': C.amber,
   'Work in Progress (過去)': C.red,
   'Work in Progress': C.amber,
 };
@@ -394,8 +411,23 @@ function chunkItems<T>(items: T[], size: number): T[][] {
   return result;
 }
 
+export interface ReportSlideOptions {
+  excelReportUrl?: string;
+  excelFilename?: string;
+  startDate?: string;
+  endDate?: string;
+  periodLabel?: string;
+}
+
 // --- Ticket Data Aggregation Helper (Single source of truth for slide deck) ---
-export function aggregateTicketData(ticketsData: any[]) {
+export function aggregateTicketData(ticketsData: any[], options?: ReportSlideOptions) {
+  const startDate = (options?.startDate || '').trim();
+  const endDate = (options?.endDate || '').trim();
+  const isPeriodMode = Boolean(startDate && endDate);
+  const wipCurrentLabel = isPeriodMode ? 'Work in Progress (本期)' : 'Work in Progress (本月)';
+  const newSourceLabel = isPeriodMode ? '當期新進' : '當月新進';
+  const crossSourceLabel = isPeriodMode ? '跨期結案/異動' : '跨月結案/異動';
+
   // 1. 排除 merged 重複計算工單，取得真實有效服務工單
   const excludedTickets = ticketsData
     .filter((t: any) => (t['狀態'] || '').toLowerCase() === 'merged')
@@ -407,10 +439,10 @@ export function aggregateTicketData(ticketsData: any[]) {
   const totalTickets = validTickets.length;
   const totalRaw = ticketsData.length;
 
-  let reportMonth = '本月';
-  let reportYear = '2026';
+  let reportMonth = isPeriodMode ? (options?.periodLabel || `${startDate} – ${endDate}`) : '本月';
+  let reportYear = isPeriodMode ? endDate.slice(0, 4) : '2026';
   let targetYM = '';
-  if (validTickets.length > 0) {
+  if (!isPeriodMode && validTickets.length > 0) {
     const ymCounts = new Map<string, number>();
     validTickets.forEach((t: any) => {
       const d = t['建立時間'] || t['最後更新時間'];
@@ -455,26 +487,29 @@ export function aggregateTicketData(ticketsData: any[]) {
     const displayGroup = GROUP_DISPLAY_NAME[rawGroup] || rawGroup;
     const tags = t['標籤'] || '';
     const title = t['主旨'] || '';
-    const isCurrentMonth = targetYM ? t['建立時間']?.startsWith(targetYM) : false;
+    const createdDay = (t['建立時間'] || '').slice(0, 10);
+    const isCurrentPeriod = isPeriodMode
+      ? Boolean(createdDay.length === 10 && createdDay >= startDate && createdDay <= endDate)
+      : Boolean(targetYM && t['建立時間']?.startsWith(targetYM));
 
     let displayStatus = 'closed';
-    let dataSource = '當月新進';
+    let dataSource = newSourceLabel;
     if (rawStatus === 'closed') {
       displayStatus = 'closed';
       closedCount++;
       statusMap.set('closed', (statusMap.get('closed') || 0) + 1);
-      if (isCurrentMonth) {
-        dataSource = '當月新進';
+      if (isCurrentPeriod) {
+        dataSource = newSourceLabel;
         currentMonthSourceCount++;
       } else {
-        dataSource = '跨月結案/異動';
+        dataSource = crossSourceLabel;
         crossMonthClosedSourceCount++;
       }
     } else {
-      if (isCurrentMonth) {
-        displayStatus = 'Work in Progress (本月)';
+      if (isCurrentPeriod) {
+        displayStatus = wipCurrentLabel;
         newUnclosedCount++;
-        dataSource = '當月新進';
+        dataSource = newSourceLabel;
         currentMonthSourceCount++;
       } else {
         displayStatus = 'Work in Progress (過去)';
@@ -500,7 +535,7 @@ export function aggregateTicketData(ticketsData: any[]) {
         ...t,
         displayGroup,
         displayStatus,
-        isAccumulated: !isCurrentMonth,
+        isAccumulated: !isCurrentPeriod,
       });
     }
 
@@ -573,19 +608,22 @@ if (accumulatedUnclosedCount > 0) {
   });
 }
 
+const unitLabel = isPeriodMode ? '本期' : '本月';
+const currLabel = isPeriodMode ? '當期' : '當月';
+
 const newUnclosedList = inProgressTickets.filter((t) => !t.isAccumulated);
 if (newUnclosedList.length === 1) {
   const single = newUnclosedList[0];
   const cleanSubj = single['主旨']?.length > 30 ? single['主旨'].slice(0, 30) + '...' : single['主旨'];
   dynamicMilestones.push({
-    tag: '當月追蹤',
-    text: `持續追蹤並完成本月 Work in Progress 工單：#${single['工單編號']} ${cleanSubj}`,
+    tag: `${currLabel}追蹤`,
+    text: `持續追蹤並完成${unitLabel} Work in Progress 工單：#${single['工單編號']} ${cleanSubj}`,
     color: C.amber,
   });
 } else if (newUnclosedList.length > 1) {
   dynamicMilestones.push({
-    tag: '當月追蹤',
-    text: `追蹤並完成本月新開 ${newUnclosedList.length} 筆 Work in Progress 工單之後續處理與驗收`,
+    tag: `${currLabel}追蹤`,
+    text: `追蹤並完成${unitLabel}新開 ${newUnclosedList.length} 筆 Work in Progress 工單之後續處理與驗收`,
     color: C.amber,
   });
 }
@@ -593,7 +631,7 @@ if (newUnclosedList.length === 1) {
 if (sopTickets.length > 0) {
   dynamicMilestones.push({
     tag: '標準規範',
-    text: `推動 IT 服務標準化，落實並宣導當月發起之 ${sopTickets.length} 項 SOP 作業規範`,
+    text: `推動 IT 服務標準化，落實並宣導${currLabel}發起之 ${sopTickets.length} 項 SOP 作業規範`,
     color: C.green,
   });
 }
@@ -611,7 +649,7 @@ const onboardingCount = validTickets.filter(
 if (onboardingCount > 0) {
   dynamicMilestones.push({
     tag: '人員異動',
-    text: `配合新進與調職同仁之辦公環境部署與帳號權限設定（本月 ${onboardingCount} 筆）`,
+    text: `配合新進與調職同仁之辦公環境部署與帳號權限設定（${unitLabel} ${onboardingCount} 筆）`,
     color: C.blue,
   });
 }
@@ -622,7 +660,7 @@ const hardwareCount = validTickets.filter(
 if (hardwareCount >= 3) {
   dynamicMilestones.push({
     tag: '設備維運',
-    text: `落實同仁電腦硬體設備維護、定期健檢與 IT 備品庫存盤點（本月 ${hardwareCount} 筆）`,
+    text: `落實同仁電腦硬體設備維護、定期健檢與 IT 備品庫存盤點（${unitLabel} ${hardwareCount} 筆）`,
     color: C.navy,
   });
 }
@@ -631,7 +669,7 @@ const softwareCount = validTickets.filter((t: any) => t['群組'] === 'Software'
 if (softwareCount >= 3 && dynamicMilestones.length < 5) {
   dynamicMilestones.push({
     tag: '授權優化',
-    text: `盤點與優化常用辦公軟體授權 (License) 與軟體配置流程（本月 ${softwareCount} 筆）`,
+    text: `盤點與優化常用辦公軟體授權 (License) 與軟體配置流程（${unitLabel} ${softwareCount} 筆）`,
     color: C.sky,
   });
 }
@@ -639,7 +677,7 @@ if (softwareCount >= 3 && dynamicMilestones.length < 5) {
 if (dynamicMilestones.length === 0) {
   dynamicMilestones.push({
     tag: '品質維護',
-    text: '落實當月 100% 結案之各項服務滿意度追蹤與 IT 基礎維運巡檢',
+    text: `落實${currLabel} 100% 結案之各項服務滿意度追蹤與 IT 基礎維運巡檢`,
     color: C.green,
   });
   dynamicMilestones.push({
@@ -655,6 +693,12 @@ const finalMilestones = dynamicMilestones.slice(0, 5);
     totalTickets,
     totalRaw,
     targetYM,
+    isPeriodMode,
+    startDate,
+    endDate,
+    wipCurrentLabel,
+    newSourceLabel,
+    crossSourceLabel,
     reportMonth,
     reportYear,
     statusData,
@@ -679,14 +723,9 @@ const finalMilestones = dynamicMilestones.slice(0, 5);
   };
 }
 
-export interface ReportSlideOptions {
-  excelReportUrl?: string;
-  excelFilename?: string;
-}
-
 // --- Factory function to generate isometric slides from any tickets array ---
 export function createReportSlides(ticketsData: any[], options?: ReportSlideOptions): Page[] {
-  const aggregated = aggregateTicketData(ticketsData);
+  const aggregated = aggregateTicketData(ticketsData, options);
   const useAggregatedData = () => aggregated;
   const excelReportUrl = options?.excelReportUrl;
   const excelFilename =
@@ -895,7 +934,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
 
               {tab === 'valid' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12 }}>
-                  {['全部', '當月新進', '跨月結案/異動', '歷史在辦'].map((src) => {
+                  {['全部', aggregated.newSourceLabel, aggregated.crossSourceLabel, '歷史在辦'].map((src) => {
                     const active = sourceFilter === src;
                     return (
                       <button
@@ -1014,7 +1053,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
   // --- Slide 1: Cover (cover-city.jpg + Hero Title + Pills + LogoLockup) ---
   const TitleSlide: Page = () => {
     const [excelModalOpen, setExcelModalOpen] = useState(false);
-    const { reportMonth, totalTickets, resolutionRate } = useAggregatedData();
+    const { reportMonth, totalTickets, resolutionRate, isPeriodMode } = useAggregatedData();
     const companyTitle =
       (import.meta as any).env?.VITE_COMPANY_NAME || 'ENTERPRISE IT SERVICE REPORT';
 
@@ -1078,7 +1117,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
           >
             IT Support
             <br />
-            {reportMonth} 月報
+            {isPeriodMode ? '服務週期報告' : `${reportMonth} 月報`}
           </h1>
           <div
             style={{
@@ -1089,9 +1128,10 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
               marginTop: 44,
             }}
           >
+            {isPeriodMode && <Pill>統計區間：{reportMonth}</Pill>}
             <Pill>有效服務工單總計：{totalTickets} 筆</Pill>
-            <Pill>當月結案率：{resolutionRate}%</Pill>
-            <Pill>Monthly IT Operations Overview</Pill>
+            <Pill>{isPeriodMode ? '當期結案率' : '當月結案率'}：{resolutionRate}%</Pill>
+            {!isPeriodMode && <Pill>Monthly IT Operations Overview</Pill>}
           </div>
         </div>
         <div
@@ -1161,7 +1201,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
             </a>
           )}
         </div>
-        <Title>當月維運總覽與工單結算</Title>
+        <Title>{aggregated.isPeriodMode ? '當期維運總覽與工單結算' : '當月維運總覽與工單結算'}</Title>
 
         {/* Top 3 KPI Cards */}
         <div
@@ -1183,7 +1223,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
             <div style={{ fontSize: 22, color: C.muted, marginTop: 8 }}>已排除 merged 重複工單</div>
           </Card>
 
-          <Card title="當月結案率" style={{ padding: '24px 32px' }}>
+          <Card title={aggregated.isPeriodMode ? '當期結案率' : '當月結案率'} style={{ padding: '24px 32px' }}>
             <div style={{ fontFamily: 'var(--osd-font-display)', fontSize: 64, fontWeight: 800, color: C.green, lineHeight: 1.1 }}>
               {resolutionRate}
               <span style={{ fontSize: 28, marginLeft: 6, color: C.navy }}>%</span>
@@ -1533,7 +1573,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
           >
             共計 <strong style={{ color: C.navy }}>{inProgressTickets.length}</strong> 筆
             {accumulatedUnclosedCount > 0
-              ? `（含 ${accumulatedUnclosedCount} 筆過去累積、${newUnclosedCount} 筆本月新開`
+              ? `（含 ${accumulatedUnclosedCount} 筆過去累積、${newUnclosedCount} 筆${aggregated.isPeriodMode ? '本期' : '本月'}新開`
               : ''}
             {accumulatedUnclosedCount > 0 && totalPages > 1
               ? `；本頁顯示第 ${pageIdx * IN_PROGRESS_PAGE_SIZE + 1} ~ ${Math.min(
@@ -1622,7 +1662,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
                     }}
                   >
                     <Dot color={sColor} />
-                    {isAccum ? 'Work in Progress (過去)' : 'Work in Progress (本月)'}
+                    {isAccum ? 'Work in Progress (過去)' : aggregated.wipCurrentLabel}
                   </div>
                   <div
                     style={{
@@ -1643,7 +1683,7 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
             {inProgressTickets.length === 0 && (
               <Card highlight style={{ marginTop: 40, textAlign: 'center', padding: '48px 36px' }}>
                 <div style={{ fontSize: 32, fontWeight: 800, color: C.green }}>
-                  本月所有有效服務工單皆已結案處理完畢，無待辦積壓工單。
+                  {aggregated.isPeriodMode ? '本期' : '本月'}所有有效服務工單皆已結案處理完畢，無待辦積壓工單。
                 </div>
               </Card>
             )}
@@ -1705,7 +1745,9 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
               </table>
             ) : (
               <Card style={{ marginTop: 40, textAlign: 'center', padding: '48px 36px' }}>
-                <div style={{ fontSize: 30, fontWeight: 700, color: C.muted }}>本月無總部相關支援工單。</div>
+                <div style={{ fontSize: 30, fontWeight: 700, color: C.muted }}>
+                  {aggregated.isPeriodMode ? '本期無總部相關支援工單。' : '本月無總部相關支援工單。'}
+                </div>
               </Card>
             )}
           </div>
@@ -1767,7 +1809,9 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
               </table>
             ) : (
               <Card style={{ marginTop: 40, textAlign: 'center', padding: '48px 36px' }}>
-                <div style={{ fontSize: 30, fontWeight: 700, color: C.muted }}>本月無 SOP 相關工單。</div>
+                <div style={{ fontSize: 30, fontWeight: 700, color: C.muted }}>
+                  {aggregated.isPeriodMode ? '本期無 SOP 相關工單。' : '本月無 SOP 相關工單。'}
+                </div>
               </Card>
             )}
           </div>
@@ -1786,8 +1830,8 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
 
     return (
       <div style={{ ...fill, ...gridBg }}>
-        <Header n={7} label="下月重點規劃" />
-        <Title>下月關鍵里程碑與維運計畫</Title>
+        <Header n={7} label={aggregated.isPeriodMode ? '下期重點規劃' : '下月重點規劃'} />
+        <Title>{aggregated.isPeriodMode ? '下期關鍵里程碑與維運計畫' : '下月關鍵里程碑與維運計畫'}</Title>
 
         <div
           style={{
@@ -1838,160 +1882,6 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
         </div>
 
         <Footer year={reportYear} />
-      </div>
-    );
-  };
-
-  // --- Slide N+4: Data Verification & Built-in Excel Download ---
-  const DataAuditSlide: Page = () => {
-    const [excelModalOpen, setExcelModalOpen] = useState(false);
-    const {
-      totalTickets,
-      totalRaw,
-      excludedTickets,
-      sourceCounts,
-      closedCount,
-      newUnclosedCount,
-      accumulatedUnclosedCount,
-      reportYear,
-    } = useAggregatedData();
-
-    return (
-      <div style={{ ...fill, ...gridBg }}>
-        <Header n={8} label="資料驗證與 Excel 匯出" />
-        <div
-          className="osd-no-print"
-          style={{
-            position: 'absolute',
-            top: 64,
-            right: 100,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-          }}
-        >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExcelModalOpen(true);
-            }}
-            style={actionBtnStyle}
-          >
-            展開完整 Excel 明細表
-          </button>
-          {excelReportUrl && (
-            <a
-              href={excelReportUrl}
-              download={excelFilename}
-              onClick={(e) => e.stopPropagation()}
-              style={primaryBtnStyle}
-            >
-              下載完整 Excel (.xlsx)
-            </a>
-          )}
-        </div>
-        <Title>有效服務工單口徑與核對摘要</Title>
-
-        {/* Top 3 Reconciliation KPI Cards */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 262,
-            left: 100,
-            right: 100,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 32,
-          }}
-        >
-          <Card title="原始擷取工單" style={{ padding: '22px 30px' }}>
-            <div style={{ fontFamily: 'var(--osd-font-display)', fontSize: 56, fontWeight: 800, color: C.navy, lineHeight: 1.1 }}>
-              {totalRaw}
-              <span style={{ fontSize: 26, marginLeft: 8, color: C.muted }}>筆</span>
-            </div>
-            <div style={{ fontSize: 21, color: C.muted, marginTop: 8 }}>已通過授權網域過濾</div>
-          </Card>
-
-          <Card title="排除重複工單 (merged)" style={{ padding: '22px 30px' }}>
-            <div
-              style={{
-                fontFamily: 'var(--osd-font-display)',
-                fontSize: 56,
-                fontWeight: 800,
-                color: excludedTickets.length > 0 ? C.amber : C.muted,
-                lineHeight: 1.1,
-              }}
-            >
-              {excludedTickets.length}
-              <span style={{ fontSize: 26, marginLeft: 8, color: C.muted }}>筆</span>
-            </div>
-            <div style={{ fontSize: 21, color: C.muted, marginTop: 8 }}>避免合併工單重複計數</div>
-          </Card>
-
-          <Card title="有效服務工單總計" highlight style={{ padding: '22px 30px' }}>
-            <div style={{ fontFamily: 'var(--osd-font-display)', fontSize: 56, fontWeight: 800, color: C.blue, lineHeight: 1.1 }}>
-              {totalTickets}
-              <span style={{ fontSize: 26, marginLeft: 8, color: C.navy }}>筆</span>
-            </div>
-            <div style={{ fontSize: 21, color: C.muted, marginTop: 8 }}>
-              已結案 {closedCount} 筆 ＋ 進行中 {newUnclosedCount + accumulatedUnclosedCount} 筆
-            </div>
-          </Card>
-        </div>
-
-        {/* Reconciliation Breakdown Table */}
-        <div style={{ position: 'absolute', top: 486, left: 100, right: 100 }}>
-          <table style={tableWrap}>
-            <thead>
-              <tr>
-                <th style={{ ...th, width: '28%' }}>資料來源口徑</th>
-                <th style={{ ...th, width: '14%', textAlign: 'right' }}>工單筆數</th>
-                <th style={{ ...th, width: '14%', textAlign: 'right' }}>佔有效比</th>
-                <th style={th}>對應 Excel 工作表與統計說明</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ ...td, fontWeight: 800, color: C.navy }}>當月新進</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: C.blue }}>{sourceCounts.currentMonth}</td>
-                <td style={{ ...td, textAlign: 'right', color: C.muted }}>
-                  {totalTickets > 0 ? `${((sourceCounts.currentMonth / totalTickets) * 100).toFixed(1)}%` : '0.0%'}
-                </td>
-                <td style={td}>當月建立之有效工單（包含已結案與 Work in Progress 本月）</td>
-              </tr>
-              <tr>
-                <td style={{ ...td, fontWeight: 800, color: C.navy }}>跨月結案 / 異動</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: C.green }}>{sourceCounts.crossMonthClosed}</td>
-                <td style={{ ...td, textAlign: 'right', color: C.muted }}>
-                  {totalTickets > 0 ? `${((sourceCounts.crossMonthClosed / totalTickets) * 100).toFixed(1)}%` : '0.0%'}
-                </td>
-                <td style={td}>當月前開立、於查詢月份內結案之服務交付工單</td>
-              </tr>
-              <tr>
-                <td style={{ ...td, fontWeight: 800, color: C.navy }}>歷史在辦未結</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: C.red }}>{sourceCounts.historicalOpen}</td>
-                <td style={{ ...td, textAlign: 'right', color: C.muted }}>
-                  {totalTickets > 0 ? `${((sourceCounts.historicalOpen / totalTickets) * 100).toFixed(1)}%` : '0.0%'}
-                </td>
-                <td style={td}>當月前開立且目前仍為 open 之累積追蹤項目</td>
-              </tr>
-              <tr>
-                <td style={{ ...td, fontWeight: 700, color: C.muted, background: '#FFF9F0' }}>merged 重複工單（排除）</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: C.muted, background: '#FFF9F0' }}>
-                  {excludedTickets.length}
-                </td>
-                <td style={{ ...td, textAlign: 'right', color: C.muted, background: '#FFF9F0' }}>—</td>
-                <td style={{ ...td, color: C.muted, background: '#FFF9F0' }}>
-                  已併入其他主工單，留存於「全部工單 / merged」工作表供核對
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <Footer year={reportYear} />
-        <ExcelPreviewModal open={excelModalOpen} onClose={() => setExcelModalOpen(false)} />
       </div>
     );
   };
@@ -2054,7 +1944,6 @@ export function createReportSlides(ticketsData: any[], options?: ReportSlideOpti
     ...featuredSlides,
     ...sopSlides,
     NextMonthTasksSlide,
-    DataAuditSlide,
     ClosingSlide,
   ];
 }

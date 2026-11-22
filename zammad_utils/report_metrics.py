@@ -94,6 +94,8 @@ def classify_valid_service_tickets(
     records: list[dict[str, Any]],
     target_ym: str,
     hq_email: str = "",
+    start_date: str = "",
+    end_date: str = "",
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """
     Separate valid service tickets from merged duplicates and enrich audit columns.
@@ -103,20 +105,35 @@ def classify_valid_service_tickets(
     records : list[dict[str, Any]]
         Normalized ticket records exported by ``fetch_zammad_tickets`` or ``generate_mock_tickets``.
     target_ym : str
-        Target month string in ``YYYY-MM`` format.
+        Target month string in ``YYYY-MM`` format (or period key such as ``2026-10-15_to_2026-11-15``).
     hq_email : str, optional
         Optional HQ email address used to flag HQ/featured support tickets.
+    start_date : str, optional
+        Inclusive period start date (``YYYY-MM-DD``). When paired with *end_date*,
+        current-period tickets are matched against ``[start_date, end_date]``
+        instead of a single ``YYYY-MM`` prefix.
+    end_date : str, optional
+        Inclusive period end date (``YYYY-MM-DD``).
 
     Returns
     -------
     tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]
         ``(valid_df, all_df, summary_dict)`` matching the slide template logic.
     """
+    is_period_mode = bool(start_date and end_date)
+    wip_curr_label = "Work in Progress (本期)" if is_period_mode else "Work in Progress (本月)"
+    new_source_label = "當期新進" if is_period_mode else "當月新進"
+    cross_source_label = "跨期結案/異動" if is_period_mode else "跨月結案/異動"
+
     if not records:
         empty_valid = pd.DataFrame(columns=BASE_TICKET_COLUMNS + VALID_TICKET_AUDIT_COLUMNS)
         empty_all = pd.DataFrame(columns=BASE_TICKET_COLUMNS + ["是否計入有效工單"])
         empty_summary = {
             "target_ym": target_ym,
+            "is_period_mode": is_period_mode,
+            "start_date": start_date,
+            "end_date": end_date,
+            "wip_curr_label": wip_curr_label,
             "total_raw": 0,
             "total_valid": 0,
             "excluded_merged": 0,
@@ -133,7 +150,7 @@ def classify_valid_service_tickets(
         }
         return empty_valid, empty_all, empty_summary
 
-    resolved_ym = resolve_target_month(records, target_ym)
+    resolved_ym = "" if is_period_mode else resolve_target_month(records, target_ym)
     hq_marker = (hq_email or "").strip().lower()
 
     all_rows: list[dict[str, Any]] = []
@@ -168,16 +185,20 @@ def classify_valid_service_tickets(
         title = str(rec.get("主旨", "") or "")
         requester = str(rec.get("提單人", "") or "")
         created_at = str(rec.get("建立時間", "") or "")
-        is_current_month = bool(resolved_ym and created_at.startswith(resolved_ym))
+        created_day = created_at[:10]
+        if is_period_mode:
+            is_current_period = bool(len(created_day) == 10 and start_date <= created_day <= end_date)
+        else:
+            is_current_period = bool(resolved_ym and created_at.startswith(resolved_ym))
 
         if raw_status.lower() == "closed":
             slide_status = "closed"
             closed_count += 1
-            data_source = "當月新進" if is_current_month else "跨月結案/異動"
-        elif is_current_month:
-            slide_status = "Work in Progress (本月)"
+            data_source = new_source_label if is_current_period else cross_source_label
+        elif is_current_period:
+            slide_status = wip_curr_label
             new_unclosed_count += 1
-            data_source = "當月新進"
+            data_source = new_source_label
         else:
             slide_status = "Work in Progress (過去)"
             accumulated_unclosed_count += 1
@@ -230,7 +251,11 @@ def classify_valid_service_tickets(
     resolution_rate = f"{(closed_count / total_valid) * 100:.1f}" if total_valid > 0 else "0.0"
 
     summary = {
-        "target_ym": resolved_ym,
+        "target_ym": target_ym if is_period_mode else resolved_ym,
+        "is_period_mode": is_period_mode,
+        "start_date": start_date,
+        "end_date": end_date,
+        "wip_curr_label": wip_curr_label,
         "total_raw": total_raw,
         "total_valid": total_valid,
         "excluded_merged": total_raw - total_valid,
@@ -251,6 +276,9 @@ def classify_valid_service_tickets(
 def build_summary_dataframe(summary: dict[str, Any]) -> pd.DataFrame:
     """Build an audit summary DataFrame matching every metric on the report slides."""
     total_valid = summary["total_valid"]
+    is_period_mode = bool(summary.get("is_period_mode"))
+    wip_curr_label = summary.get("wip_curr_label") or "Work in Progress (本月)"
+    closed_label = "當期結案數 (closed)" if is_period_mode else "當月結案數 (closed)"
     rows: list[dict[str, Any]] = [
         {
             "統計維度": "核心指標",
@@ -260,7 +288,7 @@ def build_summary_dataframe(summary: dict[str, Any]) -> pd.DataFrame:
         },
         {
             "統計維度": "核心指標",
-            "項目": "當月結案數 (closed)",
+            "項目": closed_label,
             "數量": summary["closed_count"],
             "備註 / 佔比": f"結案率 {summary['resolution_rate']}%",
         },
@@ -284,7 +312,7 @@ def build_summary_dataframe(summary: dict[str, Any]) -> pd.DataFrame:
         },
     ]
 
-    for status_name in ("closed", "Work in Progress (過去)", "Work in Progress (本月)"):
+    for status_name in ("closed", "Work in Progress (過去)", wip_curr_label):
         cnt = summary["status_counts"].get(status_name, 0)
         if cnt > 0 or status_name == "closed":
             pct = f"{(cnt / total_valid) * 100:.1f}%" if total_valid > 0 else "0.0%"

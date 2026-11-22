@@ -127,6 +127,60 @@ class TestClassifyValidServiceTickets:
         row_1001 = valid_df[valid_df["工單編號"] == "1001"].iloc[0]
         assert row_1001["總部支援"] == "是"
 
+    def test_period_range_classification_across_months(self):
+        records = [
+            {
+                "工單編號": "2001",
+                "主旨": "Created in Oct second half",
+                "標籤": "",
+                "狀態": "open",
+                "群組": "Software",
+                "處理人": "Alex Chen",
+                "提單人": "Alice",
+                "建立時間": "2026-10-20",
+                "最後更新時間": "2026-10-21",
+            },
+            {
+                "工單編號": "2002",
+                "主旨": "Created in Nov first half",
+                "標籤": "",
+                "狀態": "closed",
+                "群組": "Hardware",
+                "處理人": "Sarah Lin",
+                "提單人": "Bob",
+                "建立時間": "2026-11-15",
+                "最後更新時間": "2026-11-15",
+            },
+            {
+                "工單編號": "2003",
+                "主旨": "Created before Oct 15 cutoff",
+                "標籤": "",
+                "狀態": "open",
+                "群組": "Network",
+                "處理人": "Alex Chen",
+                "提單人": "Carol",
+                "建立時間": "2026-10-10",
+                "最後更新時間": "2026-10-12",
+            },
+        ]
+        valid_df, _, summary = classify_valid_service_tickets(
+            records,
+            "2026-10-15_to_2026-11-15",
+            start_date="2026-10-15",
+            end_date="2026-11-15",
+        )
+        assert summary["new_unclosed_count"] == 1
+        assert summary["accumulated_unclosed_count"] == 1
+        assert summary["closed_count"] == 1
+
+        r2001 = valid_df[valid_df["工單編號"] == "2001"].iloc[0]
+        assert r2001["簡報狀態分類"] == "Work in Progress (本期)"
+        assert r2001["資料來源"] == "當期新進"
+
+        r2003 = valid_df[valid_df["工單編號"] == "2003"].iloc[0]
+        assert r2003["簡報狀態分類"] == "Work in Progress (過去)"
+        assert r2003["資料來源"] == "歷史在辦"
+
     def test_handles_empty_records(self):
         valid_df, all_df, summary = classify_valid_service_tickets([], "2026-10")
         assert valid_df.empty

@@ -1,7 +1,13 @@
 """Tests for zammad_utils.date_utils module."""
 
+from datetime import datetime
 import pytest
-from zammad_utils.date_utils import calculate_month_range, days_in_month
+from zammad_utils.date_utils import (
+    calculate_cutoff_range,
+    calculate_custom_range,
+    calculate_month_range,
+    days_in_month,
+)
 
 
 class TestDaysInMonth:
@@ -77,3 +83,39 @@ class TestCalculateMonthRange:
     def test_year_only_raises(self):
         with pytest.raises(ValueError):
             calculate_month_range("2026")
+
+
+class TestCalculateCutoffAndCustomRange:
+    """Test 15th-to-15th cutoff range and custom date range helpers."""
+
+    def test_cutoff_range_specific_month(self):
+        result = calculate_cutoff_range("2026-11", cutoff_day=15)
+        assert result.start_date == "2026-10-15"
+        assert result.end_date == "2026-11-15"
+        assert result.year_month == "2026-10-15_to_2026-11-15"
+        assert result.report_end == "2026-11-15"
+
+    def test_cutoff_range_january_rolls_year(self):
+        result = calculate_cutoff_range("2026-01", cutoff_day=15)
+        assert result.start_date == "2025-12-15"
+        assert result.end_date == "2026-01-15"
+
+    def test_cutoff_range_auto_on_or_after_15th(self):
+        result = calculate_cutoff_range(None, cutoff_day=15, reference_date=datetime(2026, 11, 17))
+        assert result.start_date == "2026-10-15"
+        assert result.end_date == "2026-11-15"
+
+    def test_cutoff_range_auto_before_15th(self):
+        result = calculate_cutoff_range(None, cutoff_day=15, reference_date=datetime(2026, 11, 10))
+        assert result.start_date == "2026-09-15"
+        assert result.end_date == "2026-10-15"
+
+    def test_custom_range_valid(self):
+        result = calculate_custom_range("2026-10-15", "2026-11-15")
+        assert result.start_date == "2026-10-15"
+        assert result.end_date == "2026-11-15"
+        assert result.year_month == "2026-10-15_to_2026-11-15"
+
+    def test_custom_range_reversed_raises(self):
+        with pytest.raises(ValueError):
+            calculate_custom_range("2026-11-15", "2026-10-15")

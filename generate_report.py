@@ -16,7 +16,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import dotenv_values
 
 from zammad_utils.config import load_zammad_config
-from zammad_utils.date_utils import calculate_month_range, days_in_month
+from zammad_utils.date_utils import (
+    calculate_cutoff_range,
+    calculate_custom_range,
+    calculate_month_range,
+    days_in_month,
+)
 from zammad_utils.report_metrics import (
     build_summary_dataframe,
     classify_valid_service_tickets,
@@ -43,9 +48,16 @@ DEFAULT_USER_DICT = {
 }
 
 
-def generate_mock_tickets(year_month: str, count: int = 65):
+def generate_mock_tickets(
+    year_month: str,
+    count: int = 65,
+    *,
+    start_date: str = "",
+    end_date: str = "",
+):
     """產生高品質的模擬工單資料供 Demo 或測試使用"""
-    print(f"🎲 正在產生 {year_month} 的模擬工單資料 (共 {count} 筆)...")
+    period_desc = f"{start_date} ~ {end_date}" if (start_date and end_date) else year_month
+    print(f"🎲 正在產生 {period_desc} 的模擬工單資料 (共 {count} 筆)...")
     
     statuses = ["closed", "closed", "closed", "closed", "open", "pending reminder", "merged"]
     groups = [
@@ -77,8 +89,16 @@ def generate_mock_tickets(year_month: str, count: int = 65):
         ("總部全球 IT 系統定期同步與資安查核", "Group-IT Support, audit"),
     ]
 
-    year, month = map(int, year_month.split('-'))
-    month_days = days_in_month(year, month)
+    if start_date and end_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        span_days = max((end_dt - start_dt).days, 1)
+    else:
+        year, month = map(int, year_month.split('-'))
+        month_days = days_in_month(year, month)
+        start_dt = datetime(year, month, 1)
+        end_dt = datetime(year, month, month_days)
+        span_days = max((end_dt - start_dt).days, 1)
 
     mock_tickets = []
     for i in range(1, count + 1):
@@ -88,19 +108,17 @@ def generate_mock_tickets(year_month: str, count: int = 65):
         group = random.choice(groups)
         requester = random.choice(requesters)
 
-        # 模擬少量歷史跨月在辦工單 (展示 Slide 5 跨月未結指標)
+        # 模擬少量歷史跨期/跨月在辦工單 (展示累積未結指標)
         if random.random() < 0.12 and status in ["open", "pending reminder"]:
-            prev_month = 12 if month == 1 else month - 1
-            prev_year = year - 1 if month == 1 else year
-            prev_days = days_in_month(prev_year, prev_month)
-            p_day = random.randint(1, prev_days)
-            create_date = f"{prev_year:04d}-{prev_month:02d}-{p_day:02d}"
-            update_date = f"{year:04d}-{month:02d}-{random.randint(1, min(10, month_days)):02d}"
+            c_dt = start_dt - timedelta(days=random.randint(3, 28))
+            u_dt = start_dt + timedelta(days=random.randint(0, min(10, span_days)))
+            create_date = c_dt.strftime("%Y-%m-%d")
+            update_date = u_dt.strftime("%Y-%m-%d")
         else:
-            day = random.randint(1, month_days)
-            create_date = f"{year:04d}-{month:02d}-{day:02d}"
-            update_day = min(day + random.randint(0, 5), month_days)
-            update_date = f"{year:04d}-{month:02d}-{update_day:02d}"
+            c_dt = start_dt + timedelta(days=random.randint(0, span_days))
+            u_dt = min(c_dt + timedelta(days=random.randint(0, 5)), end_dt)
+            create_date = c_dt.strftime("%Y-%m-%d")
+            update_date = u_dt.strftime("%Y-%m-%d")
 
         mock_tickets.append({
             '工單編號': ticket_num,
@@ -154,7 +172,7 @@ def fetch_zammad_tickets(url: str, token: str, start_date: str, end_date: str, r
     user_email_dict = {}
 
     print(f"📡 連線至 Zammad: {url}")
-    print(f"📅 報表查詢月份: {start_date} ~ {end_date}")
+    print(f"📅 報表統計區間: {start_date} ~ {end_date}")
     print(f"📅 報告視角截止日: {report_end}")
 
     # 1. 查詢當月新進工單
@@ -317,7 +335,14 @@ def _resolve_hq_email() -> str:
     return ""
 
 
-def export_reports(ticket_records: list, year_month: str, output_slide_data: bool = True):
+def export_reports(
+    ticket_records: list,
+    year_month: str,
+    output_slide_data: bool = True,
+    *,
+    start_date: str = "",
+    end_date: str = "",
+):
     """匯出 Excel 報表 (含有效服務工單驗證 Table) 與 Open-Slide 用的 tickets.json"""
     if not ticket_records:
         print("⚠️ 查無任何工單資料，略過匯出。")
@@ -328,7 +353,11 @@ def export_reports(ticket_records: list, year_month: str, output_slide_data: boo
     # 1. 匯出 Excel (含有效服務工單驗證 Table、統計驗證摘要、全部工單與狀態分頁)
     hq_email = _resolve_hq_email()
     valid_df, all_df, summary = classify_valid_service_tickets(
-        ticket_records, year_month, hq_email=hq_email
+        ticket_records,
+        year_month,
+        hq_email=hq_email,
+        start_date=start_date,
+        end_date=end_date,
     )
     summary_df = build_summary_dataframe(summary)
 
@@ -380,24 +409,35 @@ def export_reports(ticket_records: list, year_month: str, output_slide_data: boo
         shutil.copy2(excel_filename, slide_excel_path)
         print(f"✅ 簡報資料與 Excel 附件已同步至: {json_dir}/")
 
-        # 自動在 Open Slide 中生成該月份專屬簡報 (如 slides/report-YYYY-MM/index.tsx)
+        # 自動在 Open Slide 中生成該期專屬簡報 (如 slides/report-YYYY-MM/index.tsx 或區間目錄)
         slide_folder = os.path.join("zammad-report-slide", "slides", f"report-{year_month}")
         os.makedirs(slide_folder, exist_ok=True)
         slide_index = os.path.join(slide_folder, "index.tsx")
+        is_period_mode = bool(start_date and end_date)
+        slide_title = (
+            f"IT Support {start_date} ~ {end_date} 週期報表"
+            if is_period_mode
+            else f"IT Support {year_month} 月報"
+        )
+        period_options = (
+            f",\n  startDate: '{start_date}',\n  endDate: '{end_date}',\n  periodLabel: '{start_date.replace('-', '/')} – {end_date.replace('-', '/')}'"
+            if is_period_mode
+            else ""
+        )
         slide_content = f"""import type {{ SlideMeta }} from '@open-slide/core';
 import ticketsData from '../../public/data/tickets_{year_month}.json';
 import excelReportUrl from '../../public/data/{excel_filename}?url';
 import {{ createReportSlides, design, transition }} from '../../themes/monthlyReportTemplate';
 
 export const meta: SlideMeta = {{
-  title: 'IT Support {year_month} 月報',
+  title: '{slide_title}',
   theme: 'isometric',
 }};
 
 export {{ design, transition }};
 export default createReportSlides(ticketsData, {{
   excelReportUrl,
-  excelFilename: '{excel_filename}',
+  excelFilename: '{excel_filename}'{period_options},
 }});
 """
         with open(slide_index, "w", encoding="utf-8") as f:
@@ -412,25 +452,42 @@ def main():
     )
 
     parser = argparse.ArgumentParser(
-        description="Zammad Monthly Report Generator - 自動從 Zammad 產出月報與簡報資料",
+        description="Zammad Report Generator - 自動從 Zammad 產出服務週期/月度 Excel 報表與簡報資料",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""範例使用:
-  python generate_report.py                     # 自動抓取上個月資料
-  python generate_report.py --month 2026-07     # 指定抓取 2026 年 7 月
-  python generate_report.py --mock              # 快速產生模擬資料供 Demo 體驗
+  python generate_report.py                                    # 預設以每月 15 日為基準抓取最新完整週期 (如 10/15 - 11/15)
+  python generate_report.py --month 2026-11                    # 抓取結束於 2026-11-15 的 15 日週期 (2026-10-15 ~ 2026-11-15)
+  python generate_report.py --month 2026-10 --full-month       # 抓取完整自然月 (2026-10-01 ~ 2026-10-31)
+  python generate_report.py --start 2026-10-15 --end 2026-11-15 # 自訂起迄日期區間
+  python generate_report.py --mock                             # 快速產生模擬資料供 Demo 體驗
         """
     )
-    parser.add_argument("--month", type=str, help="指定報表月份 (格式: YYYY-MM，預設為上個月)")
+    parser.add_argument("--month", type=str, help="指定報表結束月份 (格式: YYYY-MM)")
+    parser.add_argument("--start", type=str, help="自訂起始日期 (格式: YYYY-MM-DD，需搭配 --end)")
+    parser.add_argument("--end", type=str, help="自訂結束日期 (格式: YYYY-MM-DD，需搭配 --start)")
+    parser.add_argument("--cutoff-day", type=int, default=15, help="每月結算基準日 (預設: 15，代表前月 15 日至當月 15 日)")
+    parser.add_argument("--full-month", action="store_true", help="改用完整自然月 (1 號至月底) 而非結算日週期")
     parser.add_argument("--mock", action="store_true", help="使用模擬資料產生報表 (無需連線 Zammad)")
     parser.add_argument("--mock-count", type=int, default=60, help="模擬資料筆數 (預設: 60)")
 
     args = parser.parse_args()
 
-    # 計算月份區間 (使用共用模組)
+    # 計算查詢區間 (使用共用模組)
+    use_period_dates = False
     try:
-        month_range = calculate_month_range(args.month)
-    except ValueError:
-        print("❌ 月份格式錯誤，請使用 YYYY-MM (例如 2026-07)")
+        if args.start or args.end:
+            if not (args.start and args.end):
+                print("❌ 使用自訂區間時必須同時指定 --start 與 --end (格式: YYYY-MM-DD)")
+                sys.exit(1)
+            month_range = calculate_custom_range(args.start, args.end)
+            use_period_dates = True
+        elif args.full_month:
+            month_range = calculate_month_range(args.month)
+        else:
+            month_range = calculate_cutoff_range(args.month, cutoff_day=args.cutoff_day)
+            use_period_dates = True
+    except ValueError as e:
+        print(f"❌ 日期或月份格式錯誤: {e}")
         sys.exit(1)
 
     year_month = month_range.year_month
@@ -440,8 +497,18 @@ def main():
 
     # 執行 Mock 模式或 API 連線模式
     if args.mock:
-        records = generate_mock_tickets(year_month, count=args.mock_count)
-        export_reports(records, year_month)
+        records = generate_mock_tickets(
+            year_month,
+            count=args.mock_count,
+            start_date=start_date if use_period_dates else "",
+            end_date=end_date if use_period_dates else "",
+        )
+        export_reports(
+            records,
+            year_month,
+            start_date=start_date if use_period_dates else "",
+            end_date=end_date if use_period_dates else "",
+        )
         print("\n🎉 模擬資料產生完成！你可以直接執行以下指令啟動簡報：")
         print("   cd zammad-report-slide && npm run dev\n")
     else:
@@ -450,7 +517,12 @@ def main():
         # so we are guaranteed a valid config here.
 
         records = fetch_zammad_tickets(config.url, config.token, start_date, end_date, report_end)
-        export_reports(records, year_month)
+        export_reports(
+            records,
+            year_month,
+            start_date=start_date if use_period_dates else "",
+            end_date=end_date if use_period_dates else "",
+        )
         print("\n🎉 報表處理完成！")
 
 
