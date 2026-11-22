@@ -12,7 +12,7 @@
 [![CI](https://github.com/Json105/Zammad-Monthly-Report/actions/workflows/ci.yml/badge.svg)](https://github.com/Json105/Zammad-Monthly-Report/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Automatically fetch monthly ticket data from Zammad, generating multi-sheet Excel reports and modern interactive presentation slides.**
+**Automatically fetch Zammad ticket data across monthly, 15th-cutoff billing cycles, or custom date ranges — generating structured multi-sheet Excel audit workbooks and modern interactive presentation slides.**
 
 <br />
 
@@ -34,17 +34,19 @@
 ## 🎯 Background & Benefits
 
 ### 📌 Problem Statement & Motivation
-In enterprise IT operations and customer support workflows, monthly reporting frequently encounters the following bottlenecks:
-- **Time-Consuming Manual Work**: Teams spend hours manually exporting data from Zammad, cleaning fields, and creating separate Excel sheets for ticket statuses.
-- **High Presentation Overhead**: Preparing slides for executive or cross-team meetings requires manually making static charts and pasting them into PowerPoint.
-- **Inaccurate Categorization**: Tickets often accumulate under generic `Others` groups without proper routing, distorting metrics and workload analysis.
+In enterprise IT operations and customer support workflows, recurring reporting frequently encounters the following bottlenecks:
+- **Time-Consuming Manual Work**: Teams spend hours manually exporting data from Zammad, cleaning fields, filtering out `merged` duplicates, and creating separate Excel sheets for ticket statuses.
+- **High Presentation Overhead**: Preparing executive or cross-team slides requires manually updating static charts, re-verifying totals, and pasting screenshots into PowerPoint.
+- **Inconsistent Numbers & Categorization**: Tickets accumulate under generic `Others` groups without proper routing, and hand-calculated spreadsheet totals easily drift out of sync with presentation slides.
 
 ### 🚀 Business Value & Key Benefits
-- ⏱️ **90%+ Time Savings**: Cuts down report and slide preparation time from several hours to **under 10 seconds** with a single command.
-- 📊 **Accurate & Insightful Data**: Automatically aggregates status breakdowns, department allocations, SOP tracking, and future goals to empower data-driven decisions.
-- 🎞️ **Modern Interactive Slides**: Powered by [Open-Slide](https://open-slide.dev/), replacing rigid static slides with responsive, interactive web presentations.
-- 🤖 **Smart Ticket Reclassification**: Features rule-based automated suggestions to reclassify generic `Others` tickets into correct service groups.
-- 🎲 **Zero Setup Barrier**: Built-in Mock Mode allows instant evaluation of reports and slides without requiring live Zammad API credentials.
+- ⏱️ **90%+ Time Savings**: Reduces hours of manual ticket cleanup, spreadsheet formatting, and slide creation to **under 10 seconds** with a single command.
+- 📊 **100% Metric Reconciliation (Single Source of Truth)**: A shared classification engine (`zammad_utils/report_metrics.py`) excludes `merged` duplicates and guarantees that openpyxl structured Excel Tables (`ValidServiceTickets`, `AuditSummary`) match the React/Recharts slide KPIs down to every ticket, complete with an in-slide detail viewer and one-click `.xlsx` download.
+- 📅 **Flexible Reporting Cycles**: Supports default **15th-to-15th SLA/billing cutoff cycles**, arbitrary `--start`/`--end` ranges, and full calendar months (`--full-month`), accurately distinguishing in-period new tickets from cross-period closures and historical backlog.
+- 🔒 **White-Label & Zero-Leak Architecture**: Company branding, contact info, HQ escalation tags, and custom SVG logos are injected via gitignored `.env` files with clean isometric defaults — ready for enterprise deployment and safe for public portfolio showcase.
+- 🛡️ **Automated Quality Gate & CI**: Integrated `./scripts/check-done.sh` (Python syntax checks, module imports, **84 `pytest` unit tests**, and optional frontend production build) backed by `.agents/hooks.json` (`Stop` hook) and GitHub Actions CI.
+- 🤖 **Smart Ticket Reclassification**: Rule-based recommendations automatically reclassify generic `Others` tickets into the right service groups.
+- 🎲 **Zero Setup Barrier**: Built-in `demo-report` deck and `--mock` mode enable instant evaluation without live Zammad API credentials.
 
 ---
 
@@ -78,14 +80,17 @@ Drill down into tickets tagged with `SOP` or priority milestones to foster insti
 
 ## ✨ Key Features
 
-- 🔄 **Automated Monthly Export**: Batch retrieves tickets, states, groups, and assignees via Zammad REST API.
-- 📑 **Smart Multi-Sheet Excel**: Generates an "All Tickets" master sheet and automatically splits tickets into separate sheets by status (e.g., `closed`, `open`, `pending`).
-- 🎞️ **Modern Interactive Slides**: Built on the [Open-Slide](https://open-slide.dev/) ([GitHub](https://github.com/1weiho/open-slide)) presentation engine, featuring:
-  - 🍩 Ticket Status Distribution Pie Chart
-  - 📊 Department / Group Ticket Distribution Bar Chart
-  - 🏷️ Featured & Tagged Tickets
+- 🔄 **Automated Zammad Extraction**: Batch retrieves tickets, states, groups, assignees, and tags via Zammad REST API, filtering by authorized customer domains (`ALLOWED_DOMAINS`) and removing stale pre-period closed tickets.
+- 📅 **Multi-Cycle & Custom Range Support**: Runs on a 15th-to-15th cutoff cycle by default, with CLI flags for custom `--start`/`--end` date intervals or `--full-month` calendar reporting.
+- 📑 **Structured Excel Audit Tables**: Outputs openpyxl formatted Excel Tables (`ValidServiceTickets`, `AuditSummary`, `AllTickets`, plus per-status sheets) with auto-fitted CJK column widths and freeze panes for instant reconciliation.
+- 🎞️ **White-Label Interactive Slides**: Built on [Open-Slide](https://open-slide.dev/) ([GitHub](https://github.com/1weiho/open-slide)) + Recharts with a corporate isometric design system, featuring:
+  - 🍩 Ticket Status Distribution Donut Chart & Service Domain Breakdown
+  - 📊 Service Category Bar Chart & Auto-Paginated In-Progress Backlog
+  - 🏷️ HQ / Cross-Border Escalation & Tagged Ticket Tracking (`VITE_HQ_EMAIL`)
   - 📝 SOP Workflow & Knowledge Base Ticket Tracking
-  - 🎯 Next Month Goals & Action Items
+  - 📥 Built-in Effective Ticket Modal Viewer & One-Click `.xlsx` Download
+  - 🎯 Data-Driven Next-Cycle Milestones & White-Label Env Branding (`VITE_LOGO_SVG_PATH`, `VITE_ORG_NAME`)
+- 🧪 **Automated Verification Loop**: Includes `./scripts/check-done.sh`, `.agents/hooks.json` (`Stop` hook), and GitHub Actions CI covering syntax, module imports, 84 unit tests, and frontend bundling.
 - 🎲 **Built-in Mock Mode**: Generate realistic mock data in 1 second without needing a live Zammad API token to test the full workflow!
 
 ---
@@ -132,23 +137,37 @@ Edit `.env`:
 ```env
 ZAMMAD_URL=https://support.your-company.com
 ZAMMAD_API_TOKEN=your_actual_zammad_api_token_here
+ALLOWED_DOMAINS=@your-company.com
+```
+
+*(Optional)* Customize slide branding, HQ tag filtering, or custom SVG logo locally without touching tracked code:
+
+```bash
+cp zammad-report-slide/.env.example zammad-report-slide/.env
 ```
 
 > 💡 **How to obtain a Token**: Log into Zammad ➜ Click your avatar ➜ **Profile** ➜ **Token Access** ➜ Create a Personal Access Token with `ticket.agent` or relevant read permissions.
 
-### Step 2: Generate the Monthly Report
+### Step 2: Generate the Report & Slides
 
 ```bash
-# By default, fetches all tickets from the previous month
+# Default: 15th-to-15th cutoff cycle (latest completed period)
 python generate_report.py
 
-# Or specify a target month (Format: YYYY-MM)
-python generate_report.py --month 2026-07
+# Specify a closing month for the 15th cutoff cycle (e.g. 2026-10-15 ~ 2026-11-15)
+python generate_report.py --month 2026-11
+
+# Or generate a traditional full calendar month (1st to month-end)
+python generate_report.py --month 2026-10 --full-month
+
+# Or specify an arbitrary inclusive date range
+python generate_report.py --start 2026-10-15 --end 2026-11-17
 ```
 
 After execution, the following files will be generated:
-1. `Zammad_Report_YYYY-MM.xlsx`: Comprehensive Excel workbook categorized by ticket status.
-2. `zammad-report-slide/public/data/tickets.json`: Structured JSON data feed consumed by the slide presentation.
+1. `Zammad_Report_<period>.xlsx`: Structured Excel workbook (`ValidServiceTickets`, `AuditSummary`, `AllTickets`, and status sheets).
+2. `zammad-report-slide/public/data/tickets_<period>.json` & `tickets.json`: Structured JSON data feeds for the slides.
+3. `zammad-report-slide/slides/report-<period>/index.tsx`: Auto-generated Open-Slide deck with embedded `.xlsx` download.
 
 ### Step 3: Launch Interactive Slides
 
@@ -163,10 +182,13 @@ npm run dev
 
 | Option | Description | Example |
 | :--- | :--- | :--- |
-| *(No arguments)* | Automatically fetches and exports real tickets from the **previous month** | `python generate_report.py` |
-| `--month YYYY-MM` | Specify a custom month to fetch | `python generate_report.py --month 2026-06` |
+| *(No arguments)* | Fetches real tickets for the latest completed **15th-to-15th** cycle | `python generate_report.py` |
+| `--month YYYY-MM` | Closing month (`YYYY-MM`) for cutoff cycle, or target month with `--full-month` | `python generate_report.py --month 2026-11` |
+| `--cutoff-day N` | Anchor day of month for cutoff cycles (Default: `15`) | `python generate_report.py --cutoff-day 20` |
+| `--full-month` | Switch to full calendar month mode (`01` to month-end) | `python generate_report.py --month 2026-10 --full-month` |
+| `--start` / `--end` | Custom inclusive `YYYY-MM-DD` date range | `python generate_report.py --start 2026-10-15 --end 2026-11-17` |
 | `--mock` | Run in mock data mode (No Zammad connection required) | `python generate_report.py --mock` |
-| `--mock-count N` | Set number of simulated tickets in mock mode (Default: 60) | `python generate_report.py --mock --mock-count 100` |
+| `--mock-count N` | Set number of simulated tickets in mock mode (Default: `60`) | `python generate_report.py --mock --mock-count 100` |
 | `-h`, `--help` | Display help message and options | `python generate_report.py -h` |
 
 ---
@@ -192,9 +214,21 @@ npm run dev
 
 ---
 
-## 🧪 Running Unit Tests
+## 🧪 Running Tests & Automated Verification
 
-Run the test suite with `pytest`:
+Run the unified verification script (Python `py_compile`, core module imports, and all **84** `pytest` unit tests):
+
+```bash
+./scripts/check-done.sh
+```
+
+Include the Open-Slide production frontend build check:
+
+```bash
+./scripts/check-done.sh --with-frontend
+```
+
+Or run `pytest` directly:
 
 ```bash
 pytest
@@ -202,43 +236,56 @@ pytest
 python -m pytest tests/ -v
 ```
 
+> 🤖 **Automated Quality Gate**: `.agents/hooks.json` configures a `Stop` hook that runs `../scripts/check-done.sh --hook` whenever code changes exist, while `.agents/goal-template.md` and `AGENTS.md` define the repository's `/goal` execution and test-integrity discipline.
+
 ---
 
 ## 📁 Project Directory Structure
 
 ```text
 zammad-monthly-report/
-├── .env.example            # Environment configuration template (Copy to .env)
-├── .gitignore              # Git ignore rules
+├── .env.example            # Backend environment template (Copy to .env)
+├── .gitignore              # Keeps secrets, real ticket exports, and generated decks untracked
+├── AGENTS.md               # Workspace engineering & test-integrity rules
 ├── pyproject.toml          # Python project metadata & tool configuration
 ├── requirements.txt        # Python dependency list
 ├── README.md               # English project documentation
 ├── README.zh-TW.md         # Traditional Chinese project documentation
-├── generate_report.py      # 🌟 Main script: Generates Excel report & slide data
+├── generate_report.py      # 🌟 Main CLI: Generates structured Excel audit workbooks & slide decks
 ├── reclassify_others.py    # Utility: Smart ticket reclassification
 ├── export_zammad_data.py   # Utility: Export reference dictionaries
 ├── get_states.py           # Utility: Query ticket state IDs
+├── scripts/
+│   └── check-done.sh       # 🛡️ Unified verification gate (CLI & Stop hook modes)
+├── .agents/
+│   ├── hooks.json          # Automated Stop hook wiring ./scripts/check-done.sh --hook
+│   └── goal-template.md    # Structured /goal prompt template for this stack
 ├── zammad_utils/           # 📦 Shared Python modules
-│   ├── config.py           #    Unified env loading, validation & HTTPS check
+│   ├── config.py           #    Unified env loading, domain filter & HTTPS warning
 │   ├── api.py              #    Shared Zammad API helpers
-│   └── date_utils.py       #    Month-range calculation (leap-year aware)
-├── tests/                  # 🧪 Unit tests (pytest)
+│   ├── date_utils.py       #    Month, 15th-cutoff, and custom date-range calculators
+│   └── report_metrics.py   #    Single-source ticket classifier & Excel Table formatter
+├── tests/                  # 🧪 Unit tests (84 tests via pytest)
 │   ├── test_api.py
 │   ├── test_config.py
 │   ├── test_date_utils.py
 │   ├── test_reclassify.py
-│   └── test_report_filter.py
+│   ├── test_report_filter.py
+│   └── test_slide_metrics.py
 └── zammad-report-slide/    # 🌟 Open-Slide presentation project
-    ├── .env.example        # Slide presentation branding template
+    ├── .env.example        # White-label branding, HQ marker & custom SVG logo template
+    ├── env.d.ts            # Vite asset & .xlsx?url type declarations
     ├── package.json
+    ├── tsconfig.json
     ├── open-slide.config.ts
+    ├── assets/isometric/   # Generic 3D isometric cover & closing illustrations
     ├── public/data/
-    │   └── tickets.json    # Ticket data generated by the Python script
+    │   └── tickets.json    # Ticket data generated by the Python script (gitignored)
     ├── themes/
-    │   └── monthlyReportTemplate.tsx # Slide layout and Recharts visualizations
+    │   └── monthlyReportTemplate.tsx # White-label isometric template & Recharts visuals
     └── slides/
         ├── demo-report/    # 🌟 Built-in Demo report presentation (Ready out-of-the-box)
-        └── report-YYYY-MM/ # Auto-generated monthly slide decks (Generated by generate_report.py)
+        └── report-<period>/ # Auto-generated slide decks (gitignored)
 ```
 
 ---
